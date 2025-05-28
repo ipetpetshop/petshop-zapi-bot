@@ -48,7 +48,7 @@ async function sendMessage(phone, message) {
         message
       },
       {
-        headers: {
+headers: {
   'Content-Type': 'application/json',
   'Client-Token': process.env.ZAPI_TOKEN
 },
