@@ -48,10 +48,10 @@ async function sendMessage(phone, message) {
         message
       },
       {
-headers: {
-  'Content-Type': 'application/json',
-  'Client-Token': process.env.ZAPI_TOKEN
-},
+        headers: {
+          'Content-Type': 'application/json',
+          'Client-Token': process.env.ZAPI_TOKEN
+        },
         timeout: 10000
       }
     );
@@ -73,6 +73,7 @@ headers: {
     return false;
   }
 }
+
 
 // Webhook principal
 router.post('/webhook', async (req, res) => {
