@@ -1,137 +1,106 @@
-// router.js
-const express = require('express');
-const axios = require('axios');
 require('dotenv').config();
-const departments = require('./departments');
 
-const router = express.Router();
-const ZAPI_URL = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}`;
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
 
-// Lista de DDDs brasileiros conhecidos
-const validDDDs = [
-  '11','12','13','14','15','16','17','18','19',
-  '21','22','24','27','28',
-  '31','32','33','34','35','37','38',
-  '41','42','43','44','45','46',
-  '47','48','49','51','53','54','55',
-  '61','62','63','64','65','66','67','68','69',
-  '71','73','74','75','77','79','81','82','83','84','85','86','87','88','89','91','92','93','94','95','96','97','98','99'
-];
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// CORREÇÃO 1: Adicionar rota raiz
-router.get('/', (req, res) => {
-  res.json({ 
-    status: 'Bot ativo',
-    message: 'WhatsApp Bot PetShop HappyPaws funcionando!',
-    endpoints: {
-      webhook: 'POST /webhook',
-      test: 'GET /test-send?phone=NUMERO'
-    }
+console.log('🔧 Iniciando aplicação...');
+console.log('🌍 PORT configurada:', PORT);
+console.log('🔑 ZAPI_INSTANCE_ID presente:', !!process.env.ZAPI_INSTANCE_ID);
+console.log('🔑 ZAPI_TOKEN presente:', !!process.env.ZAPI_TOKEN);
+
+// Validação das variáveis .env essenciais
+if (!process.env.ZAPI_INSTANCE_ID || !process.env.ZAPI_TOKEN) {
+  console.error('❌ Variáveis ZAPI_INSTANCE_ID ou ZAPI_TOKEN não estão definidas no .env');
+  console.error('📋 Variáveis encontradas:', Object.keys(process.env).filter(key => key.startsWith('ZAPI')));
+  process.exit(1);
+}
+
+// Middlewares
+app.use(cors());               // Libera acesso CORS (útil para dashboards externos)
+app.use(express.json({ limit: '10mb' }));       // Permite receber JSON no corpo
+app.use(morgan('dev'));        // Log básico de requisições no console
+
+// Importar router após validação das env vars
+let router;
+try {
+  router = require('./router');
+  console.log('✅ Router carregado com sucesso');
+} catch (error) {
+  console.error('❌ Erro ao carregar router:', error.message);
+  process.exit(1);
+}
+
+// Rotas
+app.use('/', router);
+
+// Middleware de tratamento de erros
+app.use((error, req, res, next) => {
+  console.error('🔥 Erro não tratado:', error);
+  res.status(500).json({ 
+    error: 'Erro interno do servidor',
+    message: error.message 
   });
 });
 
-// Formata número para padrão internacional E.164 (Brasil e Portugal no exemplo)
-function formatPhoneNumber(phone) {
-  const numericPhone = phone.replace(/\D/g, '');
-
-  if (numericPhone.startsWith('351') || numericPhone.startsWith('55')) {
-    return numericPhone;
-  }
-
-  if (numericPhone.length === 11 && validDDDs.includes(numericPhone.substring(0, 2))) {
-    return '55' + numericPhone;
-  }
-
-  return numericPhone;
-}
-
-// CORREÇÃO 2: Função de envio corrigida com endpoint correto da Z-API
-async function sendMessage(phone, message) {
-  const formattedPhone = formatPhoneNumber(phone);
-  console.log('⌛ Tentando enviar para:', formattedPhone);
-  console.log('📝 Mensagem:', message);
-
-  try {
-    const response = await axios.post(
-      `${ZAPI_URL}/send-messages`, // CORREÇÃO: endpoint correto é send-messages
-      {
-        phone: formattedPhone,
-        message
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Client-Token': process.env.ZAPI_TOKEN
-        },
-        timeout: 10000
-      }
-    );
-
-    console.log('✅ Resposta da Z-API:', response.data);
-
-    // CORREÇÃO: Verificação mais flexível da resposta
-    if (!response.data || (response.data.error && response.data.error !== 'success')) {
-      throw new Error('Resposta inesperada da Z-API: ' + JSON.stringify(response.data));
-    }
-
-    return true;
-  } catch (error) {
-    console.error('❌ Erro ao enviar mensagem:', {
-      url: `${ZAPI_URL}/send-messages`,
-      phone: formattedPhone,
-      error: error.response?.data || error.message,
-      stack: error.stack
-    });
-    return false;
-  }
-}
-
-// Webhook principal
-router.post('/webhook', async (req, res) => {
-  try {
-    console.log('📩 Webhook recebido:', JSON.stringify(req.body, null, 2));
-
-    const sender = req.body?.phone;
-    const text = req.body?.text?.message?.trim().toLowerCase();
-
-    if (!sender || !text) {
-      return res.status(400).send('Telefone ou mensagem ausentes');
-    }
-
-    const menuMessage = `🐾 *PetShop HappyPaws* 🐾\n\nPor favor, escolha uma opção:\n1️⃣ Recepção\n2️⃣ Creche e Hotel\n3️⃣ Banho e Tosa\n4️⃣ Veterinária\n5️⃣ Financeiro\n6️⃣ Diretoria\n\nDigite apenas o número correspondente`;
-
-    if (!['1', '2', '3', '4', '5', '6'].includes(text)) {
-      const sent = await sendMessage(sender, menuMessage);
-      if (!sent) {
-        console.error('Falha ao enviar menu para:', sender);
-      }
-      return res.sendStatus(200);
-    }
-
-    const department = departments[text];
-    const responseMessage = department
-      ? `🔁 Conectando você com *${department}*...`
-      : '❌ Opção inválida. Por favor, tente novamente.';
-
-    const sent = await sendMessage(sender, responseMessage);
-    if (!sent) {
-      console.error('Falha ao enviar resposta para:', sender);
-    }
-
-    return res.sendStatus(200);
-  } catch (error) {
-    console.error('🔥 Erro no webhook:', error);
-    return res.status(500).send('Erro interno no servidor');
-  }
+// Rota 404 para rotas não encontradas
+app.use('*', (req, res) => {
+  console.log('⚠️ Rota não encontrada:', req.method, req.originalUrl);
+  res.status(404).json({ 
+    error: 'Rota não encontrada',
+    method: req.method,
+    path: req.originalUrl 
+  });
 });
 
-// Rota de teste opcional
-router.get('/test-send', async (req, res) => {
-  const phone = req.query.phone;
-  if (!phone) return res.status(400).send('Parâmetro "phone" obrigatório');
-
-  const ok = await sendMessage(phone, '🚀 Teste de envio manual');
-  res.json({ sucesso: ok });
+// Inicialização do servidor
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Bot rodando na porta ${PORT}`);
+  console.log(`🌐 Servidor ativo em todas as interfaces (0.0.0.0:${PORT})`);
+  console.log(`🔗 Endpoint local: http://localhost:${PORT}/`);
+  console.log('✅ Servidor inicializado com sucesso!');
 });
 
-module.exports = router;
+// Tratamento de encerramento graceful
+server.on('error', (error) => {
+  console.error('❌ Erro no servidor:', error);
+  
+  if (error.code === 'EADDRINUSE') {
+    console.error(`🚫 Porta ${PORT} já está em uso`);
+  } else if (error.code === 'EACCES') {
+    console.error(`🚫 Sem permissão para usar a porta ${PORT}`);
+  }
+  
+  process.exit(1);
+});
+
+// Captura erros globais não tratados em promessas
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled Rejection at:', promise);
+  console.error('🧨 Reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('🔥 Uncaught Exception:', error);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('📴 Recebido SIGTERM. Encerrando servidor graciosamente...');
+  server.close(() => {
+    console.log('✅ Servidor encerrado.');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('📴 Recebido SIGINT. Encerrando servidor graciosamente...');
+  server.close(() => {
+    console.log('✅ Servidor encerrado.');
+    process.exit(0);
+  });
+});
