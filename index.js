@@ -4,8 +4,9 @@ const axios = require('axios');
 require('dotenv').config();
 const departments = require('./departments');
 
+
 const router = express.Router();
-const ZAPI_URL = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}/token/${process.env.ZAPI_TOKEN}`;
+const ZAPI_URL = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}`;
 
 // Lista de DDDs brasileiros conhecidos
 const validDDDs = [
@@ -17,18 +18,6 @@ const validDDDs = [
   '61','62','63','64','65','66','67','68','69',
   '71','73','74','75','77','79','81','82','83','84','85','86','87','88','89','91','92','93','94','95','96','97','98','99'
 ];
-
-// CORREÇÃO 1: Adicionar rota raiz
-router.get('/', (req, res) => {
-  res.json({ 
-    status: 'Bot ativo',
-    message: 'WhatsApp Bot PetShop HappyPaws funcionando!',
-    endpoints: {
-      webhook: 'POST /webhook',
-      test: 'GET /test-send?phone=NUMERO'
-    }
-  });
-});
 
 // Formata número para padrão internacional E.164 (Brasil e Portugal no exemplo)
 function formatPhoneNumber(phone) {
@@ -45,7 +34,7 @@ function formatPhoneNumber(phone) {
   return numericPhone;
 }
 
-// CORREÇÃO 2: Função de envio corrigida com endpoint e estrutura corretos da Z-API
+// Função de envio com logs detalhados
 async function sendMessage(phone, message) {
   const formattedPhone = formatPhoneNumber(phone);
   console.log('⌛ Tentando enviar para:', formattedPhone);
@@ -53,15 +42,15 @@ async function sendMessage(phone, message) {
 
   try {
     const response = await axios.post(
-      `${ZAPI_URL}/send-text`, // CORREÇÃO: URL correta da Z-API
+      `${ZAPI_URL}/send-text`,
       {
         phone: formattedPhone,
         message
       },
       {
         headers: {
-          'Content-Type': 'application/json'
-          // CORREÇÃO: Token já está na URL, não precisa do header Client-Token
+          'Content-Type': 'application/json',
+          'Client-Token': process.env.ZAPI_TOKEN
         },
         timeout: 10000
       }
@@ -69,8 +58,7 @@ async function sendMessage(phone, message) {
 
     console.log('✅ Resposta da Z-API:', response.data);
 
-    // CORREÇÃO: Verificação correta da resposta da Z-API
-    if (!response.data || response.data.error) {
+    if (!response.data || response.data.sent !== true) {
       throw new Error('Resposta inesperada da Z-API: ' + JSON.stringify(response.data));
     }
 
@@ -85,6 +73,7 @@ async function sendMessage(phone, message) {
     return false;
   }
 }
+
 
 // Webhook principal
 router.post('/webhook', async (req, res) => {
