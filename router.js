@@ -1,10 +1,12 @@
 // router.js
 const express = require('express');
 const axios = require('axios');
+require('dotenv').config();
 const departments = require('./departments');
 
+
 const router = express.Router();
-const ZAPI_URL = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}/token/${process.env.ZAPI_TOKEN}`;
+const ZAPI_URL = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}`;
 
 // Lista de DDDs brasileiros conhecidos
 const validDDDs = [
@@ -47,8 +49,9 @@ async function sendMessage(phone, message) {
       },
       {
         headers: {
-          'Content-Type': 'application/json'
-        },
+  'Content-Type': 'application/json',
+  'Client-Token': process.env.ZAPI_TOKEN
+},
         timeout: 10000
       }
     );
