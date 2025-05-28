@@ -1,14 +1,12 @@
 // router.js
 const express = require('express');
 const axios = require('axios');
-require('dotenv').config();
 const departments = require('./departments');
-
 
 const router = express.Router();
 const ZAPI_URL = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}`;
 
-// Lista de DDDs brasileiros conhecidos
+// Lista de DDDs brasileiros válidos
 const validDDDs = [
   '11','12','13','14','15','16','17','18','19',
   '21','22','24','27','28',
@@ -19,7 +17,6 @@ const validDDDs = [
   '71','73','74','75','77','79','81','82','83','84','85','86','87','88','89','91','92','93','94','95','96','97','98','99'
 ];
 
-// Formata número para padrão internacional E.164 (Brasil e Portugal no exemplo)
 function formatPhoneNumber(phone) {
   const numericPhone = phone.replace(/\D/g, '');
 
@@ -34,7 +31,6 @@ function formatPhoneNumber(phone) {
   return numericPhone;
 }
 
-// Função de envio com logs detalhados
 async function sendMessage(phone, message) {
   const formattedPhone = formatPhoneNumber(phone);
   console.log('⌛ Tentando enviar para:', formattedPhone);
@@ -74,8 +70,6 @@ async function sendMessage(phone, message) {
   }
 }
 
-
-// Webhook principal
 router.post('/webhook', async (req, res) => {
   try {
     console.log('📩 Webhook recebido:', JSON.stringify(req.body, null, 2));
@@ -91,9 +85,7 @@ router.post('/webhook', async (req, res) => {
 
     if (!['1', '2', '3', '4', '5', '6'].includes(text)) {
       const sent = await sendMessage(sender, menuMessage);
-      if (!sent) {
-        console.error('Falha ao enviar menu para:', sender);
-      }
+      if (!sent) console.error('Falha ao enviar menu para:', sender);
       return res.sendStatus(200);
     }
 
@@ -103,9 +95,7 @@ router.post('/webhook', async (req, res) => {
       : '❌ Opção inválida. Por favor, tente novamente.';
 
     const sent = await sendMessage(sender, responseMessage);
-    if (!sent) {
-      console.error('Falha ao enviar resposta para:', sender);
-    }
+    if (!sent) console.error('Falha ao enviar resposta para:', sender);
 
     return res.sendStatus(200);
   } catch (error) {
@@ -114,7 +104,6 @@ router.post('/webhook', async (req, res) => {
   }
 });
 
-// Rota de teste opcional
 router.get('/test-send', async (req, res) => {
   const phone = req.query.phone;
   if (!phone) return res.status(400).send('Parâmetro "phone" obrigatório');
